@@ -1,0 +1,158 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://wakuwakumiwaku.github.io/spitaltarife/data/local-catalog.schema.json",
+  "title": "Spitaltarife – ausschliesslich lokal geöffneter Referenzkatalog",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "app",
+    "version",
+    "system",
+    "edition",
+    "validFrom",
+    "validTo",
+    "source",
+    "coverage",
+    "groups"
+  ],
+  "properties": {
+    "app": {
+      "const": "spitaltarife.catalog"
+    },
+    "version": {
+      "const": 1
+    },
+    "system": {
+      "enum": [
+        "swissdrg",
+        "tarpsy",
+        "st-reha"
+      ]
+    },
+    "edition": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200
+    },
+    "validFrom": {
+      "type": "string",
+      "format": "date"
+    },
+    "validTo": {
+      "type": "string",
+      "format": "date"
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "url",
+        "sha256",
+        "rights"
+      ],
+      "properties": {
+        "url": {
+          "type": "string",
+          "format": "uri",
+          "pattern": "^https://",
+          "maxLength": 3000
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "rights": {
+          "const": "local-only"
+        }
+      }
+    },
+    "coverage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "scope"
+      ],
+      "properties": {
+        "kind": {
+          "enum": [
+            "full",
+            "subset"
+          ]
+        },
+        "scope": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1000
+        }
+      }
+    },
+    "groups": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 30000,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "code",
+          "title",
+          "weight",
+          "notes"
+        ],
+        "properties": {
+          "code": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000
+          },
+          "weight": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^(?:0|[1-9][0-9]{0,6})(?:\\.[0-9]{1,6})?$",
+            "description": "Nur SwissDRG: nichtnegatives Fallgewicht bis 1000000. TARPSY/ST Reha: null; Tabellen/Anwendungsbedingungen vollständig in notes und Originalquelle prüfen."
+          },
+          "notes": {
+            "type": "string",
+            "maxLength": 20000
+          }
+        }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "system": {
+            "enum": [
+              "tarpsy",
+              "st-reha"
+            ]
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "groups": {
+            "items": {
+              "properties": {
+                "weight": {
+                  "type": "null"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  ],
+  "$comment": "Zusätzliche Laufzeitprüfungen: echte Kalenderdaten, validTo>=validFrom, eindeutige Codes, nichtnegative Gewichte <=1000000, HTTPS ohne Zugangsdaten, keine Steuerzeichen. Der Hash ist eine eigene Quellen-Deklaration; die Browser-App verifiziert keine Originaldatei."
+}

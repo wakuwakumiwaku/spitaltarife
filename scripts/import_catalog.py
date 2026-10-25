@@ -1,0 +1,36 @@
+#!/usr/bin/env python3
+"""Reproduce the public structural guide from pinned official HTML (no grouper catalog)."""
+import argparse, hashlib, json, pathlib
+ROOT=pathlib.Path(__file__).resolve().parents[1]
+PIN='5911499a1e37cb122d3d03b23c409408ee883aacbca451bb2106ba84b2cb4e42'
+SYSTEMS=[
+ {'id':'swissdrg','title':'SwissDRG','area':'Akutsomatik','since':'2012-01-01','basis':'Fall','url':'https://www.swissdrg.org/de/akutsomatik/swissdrg','summary':'Leistungsbezogene Fallpauschalen für stationäre Akutsomatik in Spitälern und Geburtshäusern.','method':'Ein deklariertes Fall-Kostengewicht wird mit dem spitalspezifischen Basispreis multipliziert.','limits':['Diese Rechenhilfe gruppiert keine Diagnosen oder Behandlungen.','Ein unbereinigtes Katalog-Kostengewicht ist nicht zwingend das effektive Gewicht eines konkreten Falls.','Zu-/Abschläge bei kurzer oder langer Verweildauer, Verlegungen, Fallzusammenführungen, Zusatzentgelte und weitere Tarifregeln werden nicht automatisch geprüft oder angewandt.']},
+ {'id':'tarpsy','title':'TARPSY','area':'Psychiatrie','since':'2018-01-01','basis':'Tag','url':'https://www.swissdrg.org/de/psychiatrie/tarpsy','summary':'Stationäre Psychiatrie mit relativen Tageskostengewichten. Das BAG beschreibt zeitlich degressive relative Tageskosten.','method':'TARPSY: Gesamtverweildauer × das für diese Gesamtverweildauer geltende Tagesgewicht × Baserate. Keine Addition von Phasengewichten.','limits':['Die App leitet kein Tagesgewicht aus einer Aufenthaltsdauer ab.','Ein aufenthaltsabhängiges Tagesgewicht kann für den ganzen Aufenthalt gelten. Katalogbereiche niemals ungeprüft als marginale Tagesstaffeln addieren.','Genau eine Gesamtverweildauer und das dafür extern bestimmte Tagesgewicht eingeben; keine Kodierungs-, Verlegungs- oder Zusatzentgeltprüfung.']},
+ {'id':'st-reha','title':'ST Reha','area':'Rehabilitation','since':'2022-01-01','basis':'Tag','url':'https://www.swissdrg.org/de/rehabilitation/st-reha','summary':'Stationäre Rehabilitation mit relativen Tageskostengewichten.','method':'ST Reha: Tage je Phase × deren Tageskostengewicht, dann über Phasen summieren und mit Baserate multiplizieren. OGV sind kumulative Phasengrenzen; nicht TARPSY.','limits':['Keine automatische Zuordnung zu einer Rehabilitations-Kostengruppe.','Es werden keine Tagesgewichte oder tariflich verrechenbaren Tage aus Kalenderdaten abgeleitet.','Verlegungen, Unterbrechungen, Fallzusammenführung, Zusatzentgelte und weitere Tarifregeln sind nicht automatisch enthalten.']}
+]
+def generate(root=ROOT):
+ from convert_main_catalogs import verify_sources
+ verify_sources(root)
+ raw=(root/'sources/bag-stationaer.html').read_bytes()
+ if hashlib.sha256(raw).hexdigest()!=PIN: raise ValueError('Pinned BAG source differs')
+ text=raw.decode()
+ for token in ['SwissDRG','TARPSY','ST Reha','1. Januar 2012','1. Januar 2018','1. Januar 2022','Basispreis']:
+  if token not in text: raise ValueError('Missing source anchor: '+token)
+ manifest=json.loads((root/'sources/manifest.json').read_text())
+ files=[next(e for e in manifest if e['file']==name) for name in ['bag-stationaer.html','swissdrg-akut.html','swissdrg-tarpsy.html','swissdrg-reha.html']]
+ catalog={'schema':1,'edition':'strukturleitfaden-2026-10-22','as_of':'2026-10-22','coverage':{'profiles':3,'official_groups':0,'baserates':0,'version_status':'Archivbelegt: SwissDRG 15.0 AV 2026/2026, TARPSY 6.0 für 2026/2027, ST Reha 3.0 PV2 Titel 2025 unverändert für 2026. 1135 private Hauptsettingzeilen; 0 öffentlich gehostete Gruppen. Keine Vollständigkeit aller Änderungen bis Oktober 2026.'},'source_id':'bag-stationaer','systems':SYSTEMS,'notes':[
+ {'title':'Kostengewicht ist kein CHF-Preis','text':'Ein Kostengewicht beschreibt den relativen durchschnittlichen Behandlungsaufwand einer Fallgruppe. Es wird anhand von Fallkostendaten ausgewählter Spitäler ermittelt.','source':'bag-stationaer'},
+ {'title':'Baserate ist spitalbezogen','text':'Tarifpartner vereinbaren den Basispreis; der zuständige Kanton genehmigt ihn. Bei fehlender Einigung setzt der Kanton den Preis fest. Es gibt hier deshalb weder eine schweizweite Standard-Baserate noch erfundene kantonale Preislisten.','source':'bag-stationaer'},
+ {'title':'Fallgruppe und Grouper trennen','text':'Die nationale Tarifstruktur definiert Fallgruppen und Kostengewichte. Diagnosen, Behandlungen und weitere Kriterien führen zur Zuordnung; diese App trifft diese Zuordnung nicht.','source':'bag-stationaer'},
+ {'title':'2026 prüfen, 2027 nicht vorziehen','text':'Vor jeder Rechnung System, Abrechnungsjahr, konkrete Strukturversion, Anwendungsregeln und den passenden Spital-/Versicherer-Basispreis prüfen. Ein bereits veröffentlichtes Folgejahr ist nicht automatisch für 2026 anwendbar.','source':'app-scope'}]}
+ provenance={'schema':1,'id':'bag-stationaer','title':'BAG – Stationäre Tarifstrukturen','url':files[0]['url'],'publication_date':None,'publication_note':'Kein im sichtbaren Artikel ausgewiesenes Veröffentlichungsdatum; allgemeiner Strukturleitfaden, kein Jahreskatalog.','retrieved_at':files[0]['retrieved_at'],'files':files,'rights':'Eigene sachliche BAG-Paraphrasen und Quellenmetadaten; keine öffentlich gehosteten vollständigen Gruppen-/Gewichtstabellen. Archivierte Nutzungsbedingungen vom 17.04.2026 behalten Rechte vor und verlangen vorherige schriftliche Genehmigung insbesondere für Kopieren und Veröffentlichen. Aktuelle Live-Bedingungen HTTP 500; keine offene Lizenz nachgewiesen. Keine abschliessende juristische Feststellung einzelner Werte und keine angenommene Vereinbarung oder pauschale private Nutzungslizenz. Ein Konverter ist keine Nachnutzungserlaubnis.','catalog_gap':'Historie: Drei BAG-verlinkte Systemseiten lieferten HTTP 500, weitere Suche auch 403/429. Danach wurden neun echte Katalogartefakte aus datierten offiziellen Archiven beschafft: 1135 Hauptsettingzeilen privat. Kein technischer Null-Katalog-Grund mehr; 0 Gruppen öffentlich gehostet wegen ungeklärter Nachnutzungsrechte. SwissDRG-Anlagen 2/3, TARPSY-ZE und Verbrennungs-ZE sind beschafft, aber nicht modelliert. ST-Reha-ZE 2026 und neu beschriftete AV2-PDF fehlen; Oktober-2026-Änderungsvollständigkeit unbekannt. Keine Baserates.', 'recovered':json.loads((root/'scripts/source_metadata.json').read_text())}
+ return {'catalog.json':catalog,'provenance.json':provenance,'import-report.json':{'schema':1,'edition':catalog['edition'],'profiles':3,'official_groups':0,'baserates':0,'parser':'Pinned BAG factual paraphrase and archived official source/version metadata; 0 hosted groups. Four private main-setting converters: 1081 + 8 + 24 + 22 rows, annexes not modeled.','source_sha256':PIN}}
+def main():
+ p=argparse.ArgumentParser(description=__doc__); p.add_argument('--check',action='store_true'); a=p.parse_args()
+ for name,data in generate().items():
+  target=ROOT/'public/data'/name; content=json.dumps(data,ensure_ascii=False,indent=2)+'\n'
+  if a.check:
+   if not target.exists() or target.read_text()!=content: raise ValueError('Reimport mismatch: '+name)
+  else: target.parent.mkdir(parents=True,exist_ok=True); target.write_text(content)
+ print('3 structure profiles; 0 official groups; 0 baserates; pinned-source reproduction OK')
+if __name__=='__main__': main()

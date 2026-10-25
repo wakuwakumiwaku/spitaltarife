@@ -1,0 +1,282 @@
+<!doctype html>
+<html lang="de-CH">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta name="color-scheme" content="dark light" />
+    <meta
+      name="description"
+      content="Schweizer stationäre Tarifstrukturen verstehen und deklarierte Kostengewichte mit spitalbezogenen Basispreisen exakt berechnen."
+    />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self' data:; object-src 'none'; base-uri 'none'; form-action 'none'"
+    />
+    <title>Spitaltarife · SwissDRG, TARPSY & ST Reha</title>
+    <link rel="icon" href="./favicon.svg" />
+    <link rel="stylesheet" href="./src/styles.css" />
+    <script type="module" src="./src/app.js"></script>
+  </head>
+  <body>
+    <a class="skip" href="#main">Zum Inhalt</a>
+    <header>
+      <nav class="catalog-switch" aria-label="Kataloge">
+        <a
+          href="https://wakuwakumiwaku.github.io/spitaltarife/"
+          aria-current="page"
+          >Spitaltarife</a
+        ><a href="https://wakuwakumiwaku.github.io/arzttarife/"
+          >TARDOC & Pauschalen</a
+        ><a href="https://wakuwakumiwaku.github.io/pflegefinanzierung/"
+          >Pflegefinanzierung</a
+        >
+      </nav>
+      <details class="catalog-directory">
+        <summary>Alle Kataloge</summary>
+        <nav aria-label="Weitere Kataloge">
+          <a href="https://wakuwakumiwaku.github.io/dentotar/">DENTOTAR</a
+          ><a href="https://wakuwakumiwaku.github.io/migel/">MiGeL</a
+          ><a href="https://wakuwakumiwaku.github.io/spezialitaetenliste/"
+            >Spezialitätenliste</a
+          ><a href="https://wakuwakumiwaku.github.io/analysenliste/"
+            >Analysenliste</a
+          ><a href="https://wakuwakumiwaku.github.io/arzneimittelliste/"
+            >Arzneimittelliste (ALT)</a
+          ><a href="https://wakuwakumiwaku.github.io/physiotherapie/"
+            >Physiotherapie</a
+          >
+        </nav>
+      </details>
+      <div class="heading">
+        <div>
+          <p class="eyebrow">Stationäre Versorgung · Schweiz</p>
+          <h1>Spitaltarife</h1>
+        </div>
+        <a href="#calculator">Zum Szenariorechner ↓</a>
+      </div>
+      <p>
+        SwissDRG, TARPSY und ST Reha verstehen. Deklarierte Gewichte
+        nachvollziehbar rechnen.
+      </p>
+    </header>
+    <main id="main">
+      <p id="fatal" class="warning" role="alert">
+        Strukturleitfaden wird geladen …
+      </p>
+      <section class="scope" aria-labelledby="scope-title">
+        <h2 id="scope-title">Strukturleitfaden, kein Fallgruppenkatalog</h2>
+        <p id="coverage"></p>
+        <p>
+          Kein Grouper, keine Kodierungsprüfung und keine Abrechnungs- oder
+          Erstattungszusage. Es sind
+          <strong
+            >keine amtlichen 2026-Gruppengewichte und keine Baserates</strong
+          >
+          öffentlich gehostet. SwissDRG 15.0 AV 2026/2026, TARPSY 6.0
+          2026/2027 und ST Reha 3.0 (PV2 Titel 2025, unverändert gültig 2026)
+          sind durch echte archivierte Originale belegt. Die 1135 privaten
+          Hauptsettingzeilen bleiben wegen ungeklärter Nachnutzungsrechte privat.
+          <a href="#sources">Quellen & genaue Grenzen</a>
+        </p>
+      </section>
+      <div class="layout">
+        <section aria-labelledby="browse-title">
+          <h2 id="browse-title">Strukturen & lokale Gruppen</h2>
+          <div class="panel filters">
+            <label for="search"
+              >Suche in allen geladenen Einträgen<input
+                id="search"
+                type="search"
+                placeholder="System, Begriff oder lokaler Gruppencode"
+                autocomplete="off" /></label
+            ><label for="system-filter"
+              >System<select id="system-filter">
+                <option value="">Alle Systeme</option>
+                <option value="swissdrg">SwissDRG · Akutsomatik</option>
+                <option value="tarpsy">TARPSY · Psychiatrie</option>
+                <option value="st-reha">ST Reha · Rehabilitation</option>
+              </select></label
+            ><label class="check"
+              ><input id="favorites-filter" type="checkbox" /> Nur gemerkte
+              Systeme</label
+            ><button id="reset" type="button">Filter zurücksetzen</button>
+          </div>
+          <p id="result-count" role="status" aria-live="polite"></p>
+          <div id="results"></div>
+          <button id="more" type="button" hidden>Mehr anzeigen</button>
+          <section id="local-import" class="panel">
+            <h3>Eigenen Gruppenkatalog lokal öffnen</h3>
+            <p>
+              Normalisiertes JSON nach dem
+              <a href="./data/local-catalog.schema.json">Importschema</a>
+              auswählen. Keine Übertragung, nur im Arbeitsspeicher; nach
+              Neuladen erneut öffnen. Keine Patienten- oder Falldaten verwenden.
+            </p>
+            <label for="catalog-file"
+              >Lokale Katalogdatei (höchstens 20 MiB)<input
+                id="catalog-file"
+                type="file"
+                accept="application/json,.json"
+            /></label>
+            <p id="local-status">Kein lokaler Katalog geladen.</p>
+            <button id="catalog-clear" type="button" hidden>
+              Lokalen Katalog schliessen
+            </button>
+          </section>
+        </section>
+        <section id="calculator" class="panel" aria-labelledby="calc-title">
+          <h2 id="calc-title">Transparentes Rechenszenario</h2>
+          <p class="muted">
+            Alle Tarifwerte selbst aus einer gültigen Quelle übernehmen. Es gibt
+            keinen voreingestellten Basispreis.
+          </p>
+          <form id="calc-form">
+            <label for="calc-system"
+              >System<select id="calc-system">
+                <option value="swissdrg">SwissDRG · Fallgewicht</option>
+                <option value="tarpsy">
+                  TARPSY · Gesamtverweildauer × Tagesgewicht
+                </option>
+                <option value="st-reha">
+                  ST Reha · phasenweise Tagessumme
+                </option>
+              </select></label
+            >
+            <div class="form-grid">
+              <label for="calc-label"
+                >Szenarioname (keine Personendaten)<input
+                  id="calc-label"
+                  maxlength="200"
+                  autocomplete="off" /></label
+              ><label for="calc-edition"
+                >Abrechnungsjahr / Strukturversion<input
+                  id="calc-edition"
+                  maxlength="200"
+                  placeholder="Gemäss Ihrer Quelle"
+                  autocomplete="off" /></label
+              ><label for="calc-group"
+                >Extern bestimmte Gruppe (optional)<input
+                  id="calc-group"
+                  maxlength="200"
+                  autocomplete="off" /></label
+              ><label for="calc-base"
+                >Spitalbezogene Baserate in CHF<input
+                  id="calc-base"
+                  inputmode="decimal"
+                  placeholder="Nicht hinterlegt"
+                  autocomplete="off"
+              /></label>
+            </div>
+            <label for="calc-reference"
+              >Preis-/Gewichtsquelle, Spital und Gültigkeit (keine
+              Personendaten)<textarea
+                id="calc-reference"
+                rows="2"
+                maxlength="2000"
+              ></textarea>
+            </label>
+            <div id="case-input">
+              <label for="calc-weight"
+                >Deklariertes effektives Fall-Kostengewicht<input
+                  id="calc-weight"
+                  inputmode="decimal"
+                  placeholder="Bis 6 Nachkommastellen"
+                  autocomplete="off"
+              /></label>
+            </div>
+            <div id="daily-input" hidden>
+              <p id="daily-method" class="warning"></p>
+              <div id="segments"></div>
+              <button id="segment-add" type="button">
+                ST-Reha-Phase ergänzen
+              </button>
+            </div>
+            <p id="calc-limit" class="muted"></p>
+            <button type="submit">Szenario berechnen</button
+            ><output id="calc-result" aria-live="polite"
+              >Noch kein Szenario berechnet.</output
+            >
+            <p id="calc-message" role="status"></p>
+            <div class="actions">
+              <button id="scenario-save" type="button">
+                Szenario lokal merken</button
+              ><button id="draft-export" type="button">
+                Entwurf als JSON sichern</button
+              ><button id="calc-clear" type="button">Eingaben leeren</button>
+            </div>
+          </form>
+          <p class="small">
+            Exakte Dezimalrechnung: Baserate bis 2, Gewichte bis 6
+            Nachkommastellen. Zuerst gesamte Gewichtssumme bilden, danach einmal
+            kaufmännisch auf CHF 0.01 runden. Keine Rundung auf CHF 0.05. Nicht
+            enthaltene Anpassungen sind <strong>offen, nicht null</strong>.
+          </p>
+        </section>
+      </div>
+      <section class="panel" aria-labelledby="workspace-title">
+        <h2 id="workspace-title">Meine lokalen Szenarien</h2>
+        <p>
+          Nur auf diesem Gerät und nur unter dem eigenen
+          Spitaltarife-Speicherschlüssel. Kein Konto, kein Upload. Änderungen
+          werden erst mit «lokal merken» bzw. einem Merkstern gespeichert.
+        </p>
+        <p id="storage-status" role="status"></p>
+        <div class="actions">
+          <button id="workspace-export" type="button">JSON sichern</button
+          ><label class="file-button" for="workspace-file"
+            >JSON öffnen<input
+              id="workspace-file"
+              type="file"
+              accept="application/json,.json" /></label
+          ><button id="raw-export" type="button">
+            Originalspeicher sichern</button
+          ><button id="print" type="button">Drucken</button>
+        </div>
+        <div id="scenarios"></div>
+      </section>
+      <section id="notes" class="panel" aria-labelledby="notes-title">
+        <h2 id="notes-title">Begriffe & Rechengrenzen</h2>
+        <div id="notes-content"></div>
+      </section>
+      <section id="sources" class="panel" aria-labelledby="source-title">
+        <h2 id="source-title">Quellen, Stand & Nutzungsumfang</h2>
+        <div id="source-content"></div>
+        <p>
+          Keine Übernahme von Grouper-Software, Entscheidungslogik oder
+          geschützten Herstellerinstrumenten. Ein öffentlicher Download allein
+          wäre keine Nutzungserlaubnis. Lokale Dateien werden nicht Teil dieser
+          Seite oder eines öffentlichen Builds.
+        </p>
+        <p>
+          Dies ist eine unabhängige sachliche Orientierung, keine offizielle
+          Seite des BAG oder der SwissDRG AG.
+        </p>
+      </section>
+    </main>
+    <footer>
+      <a href="https://github.com/wakuwakumiwaku/spitaltarife"
+        >Quellcode & Dokumentation</a
+      >
+      · Offline nutzbar über einen lokalen Webserver nach Download des Builds;
+      kein Service Worker.
+    </footer>
+    <dialog id="detail-dialog" aria-labelledby="detail-title">
+      <div class="dialog-top">
+        <h2 id="detail-title"></h2>
+        <button id="detail-close" type="button" aria-label="Details schliessen">
+          Schliessen
+        </button>
+      </div>
+      <div id="detail-content"></div>
+    </dialog>
+    <dialog id="import-dialog" aria-labelledby="import-title">
+      <h2 id="import-title">Importvorschau</h2>
+      <div id="import-content"></div>
+      <p id="import-message" role="status"></p>
+      <div class="actions">
+        <button id="import-apply" type="button">Übernehmen</button
+        ><button id="import-cancel" type="button">Abbrechen</button>
+      </div>
+    </dialog>
+  </body>
+</html>

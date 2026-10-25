@@ -1,0 +1,9 @@
+{
+  "schema": 1,
+  "edition": "strukturleitfaden-2026-10-22",
+  "profiles": 3,
+  "official_groups": 0,
+  "baserates": 0,
+  "parser": "Pinned BAG factual paraphrase and archived official source/version metadata; 0 hosted groups. Four private main-setting converters: 1081 + 8 + 24 + 22 rows, annexes not modeled.",
+  "source_sha256": "5911499a1e37cb122d3d03b23c409408ee883aacbca451bb2106ba84b2cb4e42"
+}
