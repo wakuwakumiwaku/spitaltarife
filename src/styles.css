@@ -331,6 +331,11 @@ dialog::backdrop {
   gap: 1rem;
   flex-wrap: wrap;
 }
+.dialog-top > h2 {
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
 dialog p {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
@@ -426,6 +431,10 @@ code {
   }
   dialog {
     padding: 0.8rem;
+  }
+  #detail-dialog .dialog-top > h2 {
+    order: 1;
+    flex-basis: 100%;
   }
 }
 @media print {

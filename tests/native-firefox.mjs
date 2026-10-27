@@ -106,7 +106,7 @@ export function auditGeometry(g){
  return problems;
 }
 async function sourceBinding(){
- assert.equal(repositoryFiles.length,33);assert.equal(Object.keys(runtimeFiles).length,9);
+ assert.equal(repositoryFiles.length,35);assert.equal(Object.keys(runtimeFiles).length,9);
  const publicFiles={};for(const p of [...repositoryFiles].sort())publicFiles[p]=digest(await readFile(path.join(root,p)));
  const runtime={};for(const [destination,source] of Object.entries(runtimeFiles)){const b=await readFile(path.join(root,source));runtime[destination]={source,bytes:b.length,sha256:digest(b)};}
  const catalogs=[];
