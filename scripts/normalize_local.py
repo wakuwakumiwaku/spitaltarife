@@ -6,12 +6,15 @@ def convert(path, *, system, edition, valid_from, valid_to, source_url, source_s
     # Read full raw bytes first; original source hash is supplied separately, not invented from this CSV.
     raw=pathlib.Path(path).read_bytes()
     import io
-    reader=csv.DictReader(io.StringIO(raw.decode('utf-8-sig')),delimiter=delimiter)
-    if reader.fieldnames!=['code','title','weight','notes']: raise ValueError('Exact headers required: code;title;weight;notes')
+    reader=csv.DictReader(io.StringIO(raw.decode('utf-8-sig')),delimiter=delimiter,strict=True)
     groups=[]
-    for row in reader:
-        if set(row)!=set(reader.fieldnames) or any(v is None for v in row.values()): raise ValueError('Malformed CSV row')
-        groups.append({'code':row['code'],'title':row['title'],'weight':row['weight'] if row['weight'] else None,'notes':row['notes']})
+    try:
+        if reader.fieldnames!=['code','title','weight','notes']: raise ValueError('Exact headers required: code;title;weight;notes')
+        for row in reader:
+            if set(row)!=set(reader.fieldnames) or any(v is None for v in row.values()): raise ValueError('Malformed CSV row')
+            groups.append({'code':row['code'],'title':row['title'],'weight':row['weight'] if row['weight'] else None,'notes':row['notes']})
+    except csv.Error as error:
+        raise ValueError(f'Malformed CSV near line {reader.reader.line_num}: {error}') from error
     result={'app':'spitaltarife.catalog','version':1,'system':system,'edition':edition,'validFrom':valid_from,'validTo':valid_to,'source':{'url':source_url,'sha256':source_sha256,'rights':'local-only'},'coverage':{'kind':coverage,'scope':scope},'groups':groups}
     code="import {validateCatalog} from './src/domain.js';let s='';for await(const b of process.stdin)s+=b;validateCatalog(JSON.parse(s));"
     check=subprocess.run(['node','--input-type=module','-e',code],input=json.dumps(result),text=True,cwd=ROOT,capture_output=True)
