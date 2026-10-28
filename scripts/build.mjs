@@ -20,6 +20,14 @@ export async function validateInputs(root = project) {
   for (const [destination, source] of Object.entries(runtimeFiles)) {
     if (destination.startsWith("/") || destination.split("/").includes(".."))
       throw Error("Unsafe runtime destination");
+    // Checking only the leaf/realpath would allow an in-root directory link
+    // to redirect public inputs into private trees such as .local/.
+    let ancestor = root;
+    for (const part of source.split("/").slice(0, -1)) {
+      ancestor = path.join(ancestor, part);
+      if ((await lstat(ancestor)).isSymbolicLink())
+        throw Error("Unsafe runtime source: " + source);
+    }
     const file = path.join(root, source),
       stat = await lstat(file),
       resolved = await realpath(file);

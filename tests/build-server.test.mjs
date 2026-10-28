@@ -9,11 +9,12 @@ import {
   rm,
   readdir,
   symlink,
+  rename,
 } from "node:fs/promises";
 import path from "node:path";
 import os from "node:os";
 import { runtimeFiles } from "../scripts/files.mjs";
-import { build, project } from "../scripts/build.mjs";
+import { build, project, validateInputs } from "../scripts/build.mjs";
 import { createAppServer } from "../scripts/serve.mjs";
 async function fixture() {
   const root = await mkdtemp(path.join(os.tmpdir(), "spitaltarife-test-"));
@@ -92,6 +93,46 @@ test("missing, malformed, schema-invalid or symlinked input preserves last good 
     await rm(root, { recursive: true, force: true });
   }
 });
+for (const [directory, source, privateContent] of [
+  ["src", "src/app.js", "// SYNTHETIC PRIVATE SOURCE: never publish\n"],
+  ["public", "public/favicon.svg", '<svg xmlns="http://www.w3.org/2000/svg"><title>SYNTHETIC PRIVATE SOURCE</title></svg>'],
+  ["public/data", "public/data/local-catalog.schema.json", null],
+]) {
+  test(`symlinked runtime source ancestor ${directory} cannot publish private target bytes`, async () => {
+    const root = await fixture();
+    try {
+      await build({ root });
+      const before = await snapshot(path.join(root, "dist"));
+      const original = await readFile(path.join(root, source));
+      const privateDirectory = path.join(root, ".local", "private-input");
+      await rename(path.join(root, directory), privateDirectory);
+      await symlink(privateDirectory, path.join(root, directory));
+      const content = privateContent ?? JSON.stringify({
+        ...JSON.parse(original), title: "SYNTHETIC PRIVATE SOURCE: never publish",
+      });
+      await writeFile(path.join(root, source), content);
+      let validationError, buildError;
+      try { await validateInputs(root); } catch (e) { validationError = e; }
+      try { await build({ root }); } catch (e) { buildError = e; }
+      const destination = Object.keys(runtimeFiles).find(key => runtimeFiles[key] === source);
+      const published = await readFile(path.join(root, "dist", destination), "utf8");
+      console.log(JSON.stringify({ directory, privateSourcePublished: published === content,
+        validationError: validationError?.message, buildError: buildError?.message }));
+      assert.notEqual(published, content, "private source bytes must not be published through a symlink ancestor");
+      assert.match(validationError?.message ?? "", /Unsafe runtime source/);
+      assert.match(buildError?.message ?? "", /Unsafe runtime source/);
+      assert.deepEqual(await snapshot(path.join(root, "dist")), before, "all nine last-good runtime files survive");
+      assert.equal(await readFile(path.join(root, source), "utf8"), content, "private target remains untouched");
+      await writeFile(path.join(root, source), original);
+      await rm(path.join(root, directory));
+      await rename(privateDirectory, path.join(root, directory));
+      await build({ root });
+      assert.deepEqual(await snapshot(path.join(root, "dist")), before, "ordinary restored inputs still build byte-for-byte");
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+}
 test("server supports repository base path, bytes, HEAD, deny private/traversal and writes", async () => {
   const root = await fixture();
   let server;
