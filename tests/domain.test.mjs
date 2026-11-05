@@ -243,3 +243,65 @@ test("public inventory counts and provenance agree, corrupted metadata rejected"
     assert.throws(() => validatePublicData(...bad));
   }
 });
+
+// Execute the real app through synthetic DOM/storage boundaries; not native rendering.
+import {createContext, runInContext} from 'node:vm';
+// A synthetic DOM boundary, not rendered-browser evidence. Application handlers
+// and domain exports execute unchanged; no product function is stubbed.
+class TestElement {
+  constructor(tag = 'div') { this.tagName = tag.toUpperCase(); this.children = []; this.dataset = {}; this.attributes = {}; this.listeners = {}; this.value = ''; this.textContent = ''; this.hidden = false; this.open = false; }
+  append(...nodes) { this.children.push(...nodes); }
+  replaceChildren(...nodes) { this.children = [...nodes]; this.textContent = ''; }
+  add(option) { this.children.push(option); }
+  addEventListener(type, fn) { (this.listeners[type] ??= []).push(fn); }
+  setAttribute(key, value) { this.attributes[key] = String(value); }
+  getAttribute(key) { return this.attributes[key] ?? null; }
+  showModal() { this.open = true; }
+  close() { this.open = false; for (const fn of this.listeners.close ?? []) fn({target: this}); }
+  focus() {}
+  scrollIntoView() {}
+  querySelector(selector) { return this.children.flatMap(c => [c, ...(c.children ?? [])]).find(c => selector === '[data-field="days"]' ? c.dataset?.field === 'days' : selector === '[data-field="weight"]' && c.dataset?.field === 'weight'); }
+}
+async function appFixture({storage, data} = {}) {
+  const elements = new Map(), windowListeners = {};
+  const document = {getElementById(id) { if (!elements.has(id)) elements.set(id, new TestElement()); return elements.get(id); }, createElement: tag => new TestElement(tag), createDocumentFragment: () => new TestElement(), querySelectorAll: () => [], body: new TestElement('body')};
+  const domain = await import('../src/domain.js');
+  const sandbox = {...domain, document, localStorage: storage, structuredClone, console, URL, setTimeout, clearTimeout, Option: class extends TestElement { constructor(text, value) { super('option'); this.textContent = text; this.value = value; } }, fetch: async url => ({ok: true, json: async () => data[String(url).match(/([^/]+)\.json$/)?.[1]] ?? data.catalog})};
+  sandbox.window = {localStorage: storage, addEventListener(type, fn) { (windowListeners[type] ??= []).push(fn); }};
+  const context = createContext(sandbox);
+  const appURL = new URL('../src/app.js', import.meta.url);
+  let source = await readFile(appURL, 'utf8');
+  assert.match(source, /^import\s*\{[\s\S]*?\}\s*from\s*['"]\.\/domain\.js['"];?/);
+  source = source.replace(/^import\s*\{[\s\S]*?\}\s*from\s*['"]\.\/domain\.js['"];?/, '').replaceAll('import.meta.url', JSON.stringify(appURL.href));
+  assert.match(source, /boot\(\);\s*$/);
+  source = source.replace(/boot\(\);\s*$/, 'globalThis.__boot = boot();');
+  runInContext(source, context, {filename: appURL.pathname});
+  await context.__boot;
+  return {context, elements, run: code => runInContext(code, context), emit: async (id, type, event) => { for (const fn of elements.get(id).listeners[type] ?? []) await fn(event ?? {target: elements.get(id)}); }};
+}
+
+for (const olderFailure of ['reject', 'invalid-json']) test(`superseded file failure cannot replace the current import diagnosis: ${olderFailure}`, async () => {
+  const data = Object.fromEntries(await Promise.all(['catalog','provenance','import-report'].map(async name => [name, JSON.parse(await readFile(new URL('../public/data/'+name+'.json', import.meta.url)))])));
+  const app = await appFixture({storage: {getItem: () => null, setItem() {}}, data});
+  assert.equal(app.elements.get('fatal').hidden, true, 'boot must activate before racing file reads');
+  let rejectOlder, resolveOlder;
+  const olderText = new Promise((resolve, reject) => { resolveOlder = resolve; rejectOlder = reject; });
+  const older = app.run('openFile')({target: {files: [{size: 100, text: () => olderText}], value: 'old.json'}}, 'workspace');
+  const current = {...emptyWorkspace(), favorites: ['tarpsy']};
+  await app.run('openFile')({target: {files: [{size: 100, text: async () => JSON.stringify(current)}], value: 'current.json'}}, 'workspace');
+  const currentStatus = app.elements.get('storage-status').textContent;
+  assert.match(currentStatus, /Importvorschau geöffnet/);
+  if (olderFailure === 'reject') rejectOlder(Error('Synthetic old file read failure')); else resolveOlder('{old malformed JSON');
+  await older;
+  assert.equal(app.elements.get('storage-status').textContent, currentStatus, 'late failure belongs to superseded selection, not the current preview');
+  assert.deepEqual(JSON.parse(app.run('JSON.stringify(pending.value)')), current);
+  assert.equal(app.elements.get('import-dialog').open, true);
+});
+test('current failed file read still reports rejection without preview or storage writes', async () => {
+  const data = Object.fromEntries(await Promise.all(['catalog','provenance','import-report'].map(async name => [name, JSON.parse(await readFile(new URL('../public/data/'+name+'.json', import.meta.url)))])));
+  let writes = 0;
+  const app = await appFixture({storage: {getItem: () => null, setItem() { writes++; }}, data});
+  await app.run('openFile')({target: {files: [{size: 100, text: async () => { throw Error('Synthetic current failure'); }}], value: 'current.json'}}, 'workspace');
+  assert.match(app.elements.get('storage-status').textContent, /Datei nicht übernommen: Synthetic current failure/);
+  assert.equal(app.run('pending'), null); assert.equal(writes, 0);
+});

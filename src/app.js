@@ -441,7 +441,7 @@ async function openFile(event, type) {
     $("import-dialog").showModal();
     status("Importvorschau geöffnet: Speichern pausiert.");
   } catch (e) {
-    status("Datei nicht übernommen: " + e.message);
+    if (token === revision) status("Datei nicht übernommen: " + e.message);
   }
 }
 function closeImport() {
