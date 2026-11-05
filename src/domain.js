@@ -87,7 +87,8 @@ export function validateDraft(d, complete = false) {
   )
     throw Error("Ungültiges System oder Szenario.");
   for (const k of ["label", "edition", "group", "reference"])
-    text(d[k], k === "reference" ? 2000 : 200);
+    // A local source URL alone may contain 3000 characters; retain its dates and SHA-256 too.
+    text(d[k], k === "reference" ? 4000 : 200);
   if (
     !Array.isArray(d.segments) ||
     d.segments.length < 1 ||

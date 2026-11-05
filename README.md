@@ -61,6 +61,8 @@ In der Seite «Eigenen Gruppenkatalog lokal öffnen» wählen: nichtmutierende V
 - Baserate bis zwei, Gewichte bis sechs Dezimalstellen; BigInt-Skalierung. Erst gesamtes Gewicht bilden, dann Gesamtbetrag einmal kaufmännisch auf CHF 0.01 runden, nicht CHF 0.05.
 - **Offen, nicht null:** medizinische Gruppierung/Kodierung, Verlegung, Fallzusammenführung, Unterbrechungen, Zu-/Abschläge, Zusatzentgelte, Kostenträgeraufteilung und weitere Anwendungsregeln. Kein Grouper, keine amtliche automatische Fallberechnung oder Abrechnungs-/Erstattungsfreigabe, keine erfundene Baserate.
 
+Quellenreferenzen im Rechner und in Szenarien sind auf 4000 Zeichen begrenzt. Damit bleiben auch die im lokalen Katalog zulässigen URLs bis 3000 Zeichen zusammen mit Gültigkeitsdaten und SHA-256 vollständig erhalten. Ältere App-Stände mit 2000-Zeichen-Grenze können solche längeren Szenarien nicht öffnen.
+
 ## Lokale Sicherheit
 
 Nur `spitaltarife.workspace.v1`. Szenarien/Merksterne speichern nach bewusster Aktion. Entwürfe bleiben bei fremden Änderungen, Quota-Fehlern und defektem/blockiertem Speicher im Formular. Sicherungsimport: vollständige Schema-/Namespace-/Versions-/ID-Prüfung, Vorschau/Abbrechen ohne Mutation; vor bestätigtem Ersatz unveränderte Originalbytes zum Download anbieten, Vorwert erneut prüfen und Speicherung zurücklesen. Browser-Storage hat kein atomisches Cross-tab-Compare-and-swap. Bei Konflikt Original und Entwurf sichern, Ursache klären, erst dann neu laden. Keine Patientendaten, kein CSV-Export; Text ausschliesslich via DOM/textContent.

@@ -161,3 +161,61 @@ test('SP8-CLOSE source cascade: original font, full wrapping and normal scrollin
   }
  }
 });
+
+
+import {createContext, runInContext} from 'node:vm';
+// A synthetic DOM boundary, not rendered-browser evidence. Application handlers
+// and domain exports execute unchanged; no product function is stubbed.
+class TestElement {
+  constructor(tag = 'div') { this.tagName = tag.toUpperCase(); this.children = []; this.dataset = {}; this.attributes = {}; this.listeners = {}; this.value = ''; this.textContent = ''; this.hidden = false; this.open = false; }
+  append(...nodes) { this.children.push(...nodes); }
+  replaceChildren(...nodes) { this.children = [...nodes]; this.textContent = ''; }
+  add(option) { this.children.push(option); }
+  addEventListener(type, fn) { (this.listeners[type] ??= []).push(fn); }
+  setAttribute(key, value) { this.attributes[key] = String(value); }
+  getAttribute(key) { return this.attributes[key] ?? null; }
+  showModal() { this.open = true; }
+  close() { this.open = false; for (const fn of this.listeners.close ?? []) fn({target: this}); }
+  focus() {}
+  scrollIntoView() {}
+  querySelector(selector) { return this.children.flatMap(c => [c, ...(c.children ?? [])]).find(c => selector === '[data-field="days"]' ? c.dataset?.field === 'days' : selector === '[data-field="weight"]' && c.dataset?.field === 'weight'); }
+}
+async function appFixture({storage, data} = {}) {
+  const elements = new Map(), windowListeners = {};
+  const document = {getElementById(id) { if (!elements.has(id)) elements.set(id, new TestElement()); return elements.get(id); }, createElement: tag => new TestElement(tag), createDocumentFragment: () => new TestElement(), querySelectorAll: () => [], body: new TestElement('body')};
+  const domain = await import('../src/domain.js');
+  const sandbox = {...domain, document, localStorage: storage, structuredClone, console, URL, setTimeout, clearTimeout, Option: class extends TestElement { constructor(text, value) { super('option'); this.textContent = text; this.value = value; } }, fetch: async url => ({ok: true, json: async () => data[String(url).match(/([^/]+)\.json$/)?.[1]] ?? data.catalog})};
+  sandbox.window = {localStorage: storage, addEventListener(type, fn) { (windowListeners[type] ??= []).push(fn); }};
+  const context = createContext(sandbox);
+  const appURL = new URL('../src/app.js', import.meta.url);
+  let source = await readFile(appURL, 'utf8');
+  assert.match(source, /^import\s*\{[\s\S]*?\}\s*from\s*['"]\.\/domain\.js['"];?/);
+  source = source.replace(/^import\s*\{[\s\S]*?\}\s*from\s*['"]\.\/domain\.js['"];?/, '').replaceAll('import.meta.url', JSON.stringify(appURL.href));
+  assert.match(source, /boot\(\);\s*$/);
+  source = source.replace(/boot\(\);\s*$/, 'globalThis.__boot = boot();');
+  runInContext(source, context, {filename: appURL.pathname});
+  await context.__boot;
+  return {context, elements, run: code => runInContext(code, context), emit: async (id, type, event) => { for (const fn of elements.get(id).listeners[type] ?? []) await fn(event ?? {target: elements.get(id)}); }};
+}
+
+test('a schema-valid 3000-character source URL survives actual catalogue transfer, calculation and workspace reload', async () => {
+  const data = Object.fromEntries(await Promise.all(['catalog','provenance','import-report'].map(async name => [name, JSON.parse(await readFile(new URL('../public/data/'+name+'.json', import.meta.url)))])));
+  const url = 'https://example.invalid/' + 's'.repeat(2976); assert.equal(url.length, 3000);
+  const local = validateCatalog({app:'spitaltarife.catalog',version:1,system:'swissdrg',edition:'SYNTHETIC LONG SOURCE',validFrom:'2026-01-01',validTo:'2026-12-31',source:{url,sha256:'a'.repeat(64),rights:'local-only'},coverage:{kind:'subset',scope:'Synthetic only'},groups:[{code:'TEST',title:'Synthetic group',weight:'1.25',notes:''}]});
+  let raw = null;
+  const app = await appFixture({storage:{getItem: () => raw,setItem(key,value) { raw = value; }},data});
+  assert.equal(app.elements.get('fatal').hidden, true);
+  app.elements.get('calc-base').value = '1000'; app.elements.get('calc-label').value = 'Synthetic long source';
+  await app.run('openFile')({target:{files:[{size:4000,text:async()=>JSON.stringify(local)}],value:'catalog.json'}},'catalog');
+  app.run('applyImport(); useEntry(entries.find(e => e.type === "group"));');
+  const reference = `${url} · ${local.validFrom} bis ${local.validTo} · SHA-256 ${local.source.sha256}`;
+  assert.equal(app.elements.get('calc-reference').value, reference, 'keep the entire source URL, dates and digest');
+  app.run('saveScenario();');
+  assert.ok(raw, 'valid imported source reference must not prevent saving its calculated scenario');
+  const restored = validateWorkspace(JSON.parse(raw));
+  assert.equal(restored.scenarios[0].reference, reference); assert.equal(calculate(restored.scenarios[0]).cents,125000n);
+  const html = await readFile(new URL('../index.html',import.meta.url),'utf8');
+  const max = html.match(/id="calc-reference"[\s\S]*?maxlength="(\d+)"/)?.[1];
+  assert.ok(Number(max) >= reference.length, 'the editable field must admit the same complete reference');
+  assert.throws(() => validateWorkspace({...restored,scenarios:[{...restored.scenarios[0],reference:'x'.repeat(4001)}]}), /Text/, 'reference remains bounded');
+});
