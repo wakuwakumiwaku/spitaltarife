@@ -1,5 +1,7 @@
 # Spitaltarife
 
+Bei einer exakten Gruppencode-Suche erscheint die gesuchte lokale Gruppe vor Treffern, die den Code nur in gemeinsamen Hinweisen erwähnen. Alle übrigen Treffer bleiben in Quellreihenfolge erhalten.
+
 Eigene quellenbelegte Referenz für SwissDRG, TARPSY und ST Reha mit exaktem, begrenztem Szenariorechner. Deutsch, dunkles Violett, Systemfonts und helle Druckansicht; Vanilla ESM ohne Frontend-Abhängigkeiten, Tracker oder Konten.
 
 ## Öffentlicher und privater Umfang

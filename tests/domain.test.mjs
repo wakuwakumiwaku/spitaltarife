@@ -305,3 +305,23 @@ test('current failed file read still reports rejection without preview or storag
   assert.match(app.elements.get('storage-status').textContent, /Datei nicht übernommen: Synthetic current failure/);
   assert.equal(app.run('pending'), null); assert.equal(writes, 0);
 });
+
+test('exact local group code ranks ahead of notes mentioning that code without dropping matches', async () => {
+  const data=Object.fromEntries(await Promise.all(['catalog','provenance','import-report'].map(async n=>[n,JSON.parse(await readFile(new URL('../public/data/'+n+'.json',import.meta.url)))])));
+  const app=await appFixture({storage:{getItem:()=>null,setItem(){}},data});
+  assert.equal(app.elements.get('fatal').hidden,true);
+  // Deliberately synthetic groups. Global notes mimic shared source notes, not actual tariff records.
+  const rows=Array.from({length:65},(_,i)=>({id:'qa:'+i,system:'swissdrg',type:'group',edition:'QA ONLY',area:'QA',code:i===64?'QA64':'OTHER'+i,title:'Synthetic group '+i,notes:'Shared note mentions QA64',weight:null}));
+  app.context.__qaEntries=structuredClone(rows);app.run('entries=__qaEntries');
+  const search=app.elements.get('search');search.value=' qa64 ';
+  await app.emit('search','input');
+  const visible=app.elements.get('results').children;
+  assert.equal(visible[0].dataset.id,'qa:64','an exact group code must be on the first page even when every notes field matches');
+  assert.equal(visible.length,30);assert.match(app.elements.get('result-count').textContent,/65 von 65/);
+  app.run('limit=100;renderResults()');
+  assert.deepEqual(app.elements.get('results').children.map(n=>n.dataset.id),['qa:64',...rows.slice(0,64).map(r=>r.id)]);
+  search.value='';await app.emit('search','input');
+  assert.deepEqual(app.elements.get('results').children.map(n=>n.dataset.id),rows.slice(0,30).map(r=>r.id),'empty search retains source order');
+  search.value='QA64';app.elements.get('system-filter').value='tarpsy';await app.emit('search','input');assert.match(app.elements.get('result-count').textContent,/0 von 65/);
+  assert.deepEqual(JSON.parse(app.run('JSON.stringify(entries)')),rows,'ranking never mutates source entries');
+});

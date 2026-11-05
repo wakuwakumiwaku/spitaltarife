@@ -208,6 +208,12 @@ function renderResults() {
     favoritesOnly: $("favorites-filter").checked,
     favorites: workspace.favorites,
   });
+  // Shared source notes may mention many codes: keep every match, but put the
+  // requested group itself on the first page. Stable sort retains all other order.
+  const codeQuery = $("search").value.trim().toLocaleLowerCase("de-CH");
+  if (codeQuery) found.sort((a, b) =>
+    Number(b.code?.toLocaleLowerCase("de-CH") === codeQuery) -
+    Number(a.code?.toLocaleLowerCase("de-CH") === codeQuery));
   $("result-count").textContent =
     `${found.length} von ${entries.length} geladenen Einträgen · ${catalog.systems.length} Strukturprofile, ${localCatalog?.groups.length || 0} lokale Gruppen. Sichtbar: ${Math.min(limit, found.length)}.`;
   $("results").replaceChildren();
