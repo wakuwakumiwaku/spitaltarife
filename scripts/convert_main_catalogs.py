@@ -2,7 +2,7 @@
 """Convert pinned official main settings to private schema-1 JSON. No network or licence grant.
 Python stdlib; pdftotext is required for the independent PDF cross-check/rule extraction.
 """
-import argparse, csv, hashlib, io, json, pathlib, re, subprocess, zipfile
+import argparse, csv, hashlib, io, json, os, pathlib, re, subprocess, zipfile
 from decimal import Decimal, ROUND_HALF_UP
 import xml.etree.ElementTree as ET
 ROOT = pathlib.Path(__file__).resolve().parents[1]
@@ -134,13 +134,21 @@ def main():
     p=argparse.ArgumentParser(description=__doc__);p.add_argument('--check',action='store_true');p.add_argument('--output',default=str(ROOT/'.local/catalogs'));a=p.parse_args()
     out=pathlib.Path(a.output).resolve()
     if not out.is_relative_to((ROOT/'.local').resolve()): p.error('Output must stay under ignored .local/')
-    result=generate();out.mkdir(parents=True,exist_ok=True)
-    for name,data in result.items():
-        target=out/name; content=encode(data)
+    result = generate()
+    if not a.check:
+        out.mkdir(parents=True, exist_ok=True)
+        for name in result:
+            target = out / name
+            if os.path.lexists(target):  # A dangling symlink also occupies the name.
+                raise FileExistsError('Refusing overwrite: ' + str(target))
+    for name, data in result.items():
+        target = out / name
+        content = encode(data).encode('utf-8')
         if a.check:
-            if target.read_bytes()!=content.encode('utf-8'): raise ValueError('Byte reimport mismatch: '+name)
+            if target.read_bytes() != content:
+                raise ValueError('Byte reimport mismatch: ' + name)
         else:
-            if target.exists(): raise FileExistsError('Refusing overwrite: '+str(target))
-            target.write_text(content,encoding='utf-8')
+            with target.open('xb') as stream:
+                stream.write(content)
     print('Private main settings: '+', '.join(f'{k}: {len(v["groups"])}' for k,v in result.items())+'; 1135 rows; no public data written')
 if __name__=='__main__': main()

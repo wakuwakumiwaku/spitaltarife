@@ -1,6 +1,8 @@
 """Actual pinned sources optional: explicit skip in a clean public checkout, never substitute fake catalogs."""
-import csv, hashlib, importlib.util, io, json, pathlib, subprocess, sys, unittest
+import csv, hashlib, importlib.util, io, json, pathlib, subprocess, sys, tempfile, unittest
+from contextlib import redirect_stdout
 from decimal import Decimal
+from unittest.mock import patch
 ROOT=pathlib.Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT/'scripts'))
 import convert_main_catalogs as convert
@@ -12,6 +14,64 @@ class DecimalTest(unittest.TestCase):
   self.assertEqual(convert.number('1.235',164), '1.24')
   with self.assertRaises(ValueError):convert.number('1.2345678')
   with self.assertRaises(ValueError):convert.number('NaN')
+
+
+class CatalogOutputTest(unittest.TestCase):
+    def setUp(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.root = pathlib.Path(tmp.name)
+        self.out = self.root / '.local' / 'catalogs'
+        self.payloads = {'first.json': {'groups': []}, 'last.json': {'groups': ['ü']}}
+
+    def run_converter(self, *args):
+        with (patch.object(convert, 'ROOT', self.root),
+              patch.object(convert, 'generate', return_value=self.payloads),
+              patch.object(sys, 'argv', ['convert_main_catalogs.py', *args]),
+              redirect_stdout(io.StringIO())):
+            convert.main()
+
+    def test_write_and_check_exact_bytes(self):
+        with self.assertRaises(FileNotFoundError):
+            self.run_converter('--check')
+        self.assertFalse(self.out.exists())
+        self.run_converter()
+        expected = {name: convert.encode(data).encode('utf-8') for name, data in self.payloads.items()}
+        self.assertEqual({p.name: p.read_bytes() for p in self.out.iterdir()}, expected)
+        self.run_converter('--check')
+
+        last = self.out / 'last.json'
+        last.write_bytes(expected['last.json'].rstrip(b'\n'))
+        with self.assertRaisesRegex(ValueError, 'Byte reimport mismatch: last'):
+            self.run_converter('--check')
+        self.assertEqual(last.read_bytes(), expected['last.json'].rstrip(b'\n'))
+
+    def test_later_existing_output_leaves_no_partial_set(self):
+        self.out.mkdir(parents=True)
+        last = self.out / 'last.json'
+        last.write_bytes(b'\xffexisting\n')
+        with self.assertRaises(FileExistsError):
+            self.run_converter()
+        self.assertEqual(list(self.out.iterdir()), [last])
+        self.assertEqual(last.read_bytes(), b'\xffexisting\n')
+
+    def test_name_claimed_just_before_open_is_not_overwritten(self):
+        self.out.mkdir(parents=True)
+        first = self.out / 'first.json'
+        real_open = pathlib.Path.open
+
+        def claim_on_open(target, mode='r', *args, **kwargs):
+            if target == first and ('w' in mode or 'x' in mode):
+                with open(first, 'xb') as other_writer:
+                    other_writer.write(b'claimed')
+            return real_open(target, mode, *args, **kwargs)
+
+        with patch.object(pathlib.Path, 'open', claim_on_open):
+            with self.assertRaises(FileExistsError):
+                self.run_converter()
+        self.assertEqual(first.read_bytes(), b'claimed')
+
+
 @unittest.skipUnless((ROOT/'sources/catalog-SwissDRG_Version_15.0_Fallpauschalenkatalog_Abrechnungsversion_2026_2026.xlsx').exists(), 'SKIP: actual pinned private sources absent (public checkout)')
 class PinnedCatalogTest(unittest.TestCase):
  @classmethod
